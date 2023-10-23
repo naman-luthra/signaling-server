@@ -89,7 +89,12 @@ io.on('connection', (socket) => {
     })
     socket.on('disconnect', () => {
         for(let key in roomParts){
-            roomParts[key] = roomParts[key].filter(({socketId})=>socketId!=socket.id)
+            if(roomParts[key].find(({socketId})=>socketId==socket.id)){
+                roomParts[key] = roomParts[key].filter(({socketId})=>socketId!=socket.id);
+                roomParts[key].forEach(({socketId})=>{
+                    socket.to(socketId).emit('socketDisconnected', socket.id);
+                });
+            }
         }
         console.log('A client disconnected.');
     });
