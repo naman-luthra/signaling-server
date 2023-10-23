@@ -40,7 +40,7 @@ io.on('connection', (socket) => {
         console.log(roomParts);
     });
     socket.on('offersCreated', (roomId, offers)=>{
-        console.log(`Offers created for ${roomId}`);
+        console.log(`Offers created for ${roomId}`,offers);
         if(!roomId) return;
         offers.forEach(({offer,to})=>{
             socket.to(to).emit('acceptOffer', {
@@ -72,6 +72,17 @@ io.on('connection', (socket) => {
             sender: socket.id,
         });
     });
+    socket.on('iceCandidate', ({candidate, to})=>{
+        console.log(`Ice candidate from ${socket.id} to ${to}`);
+        socket.to(to).emit('saveIceCandidate', {
+            candidate,
+            sender: socket.id,
+        });
+    });
+    socket.on('streamStopped', (to)=>{
+        console.log(`Stream stopped from ${socket.id} to ${to}`);
+        socket.to(to).emit('clearTracks', socket.id);
+    })
     socket.on('roomLeft', roomId=>{
         socket.leave(roomId);
         console.log('room left');
@@ -84,7 +95,7 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8000;
 
 server.listen(PORT, () => {
   console.log('server running at http://localhost:8000');
