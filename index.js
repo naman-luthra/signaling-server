@@ -24,7 +24,7 @@ io.on('connection', (socket) => {
     socket.on('roomJoined', roomId=>{
         console.log("joined",roomId,socket.id);
         if(!roomId) return;
-        socket.join(roomId);
+        if(rooms[roomId]?.find(({socketId})=>socketId==socket.id)) return;
         roomParts[roomId] = roomParts[roomId] ? [...roomParts[roomId], {
             socketId: socket.id
         }] : [{
@@ -79,9 +79,9 @@ io.on('connection', (socket) => {
             sender: socket.id,
         });
     });
-    socket.on('streamStopped', (to)=>{
-        console.log(`Stream stopped from ${socket.id} to ${to}`);
-        socket.to(to).emit('clearTracks', socket.id);
+    socket.on('streamStopped', (to, type)=>{
+        console.log(`${type} stream stopped from ${socket.id} to ${to}`);
+        socket.to(to).emit('clearTracks', socket.id, type);
     })
     socket.on('roomLeft', roomId=>{
         socket.leave(roomId);
