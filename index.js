@@ -87,6 +87,13 @@ io.on('connection', (socket) => {
         socket.leave(roomId);
         console.log('room left');
     })
+    socket.on('chatSend', (to, message)=>{
+        console.log(`Chat message from ${socket.id} to ${to}`,message);
+        socket.to(to).emit('receiveChat', {
+            message,
+            sender: socket.id,
+        });
+    });
     socket.on('disconnect', () => {
         for(let key in roomParts){
             if(roomParts[key].find(({socketId})=>socketId==socket.id)){
