@@ -14,8 +14,6 @@ const io = new Server(server, {
 app.get('/', (req, res) => {
     res.status(200);
 });
-
-const rooms = {};
 const roomParts = {};
 
 io.on('connection', (socket) => {
@@ -24,7 +22,7 @@ io.on('connection', (socket) => {
     socket.on('roomJoined', roomId=>{
         console.log("joined",roomId,socket.id);
         if(!roomId) return;
-        if(rooms[roomId]?.find(({socketId})=>socketId==socket.id)) return;
+        if(roomParts[roomId]?.find(({socketId})=>socketId==socket.id)) return;
         roomParts[roomId] = roomParts[roomId] ? [...roomParts[roomId], {
             socketId: socket.id
         }] : [{
@@ -42,20 +40,22 @@ io.on('connection', (socket) => {
     socket.on('offersCreated', (roomId, offers)=>{
         console.log(`Offers created for ${roomId}`,offers);
         if(!roomId) return;
-        offers.forEach(({offer,to})=>{
+        offers.forEach(({offer,to,senderDetails})=>{
             socket.to(to).emit('acceptOffer', {
                 offer,
                 sender: socket.id,
+                senderDetails,
                 roomId
             });
         });
     });
-    socket.on('answerCreated', ({roomId, answer, receiver})=>{
+    socket.on('answerCreated', ({roomId, answer, receiver, senderDetails})=>{
         console.log(`Answer created for ${roomId} from ${socket.id} to ${receiver}`);
         if(!roomId) return;
         socket.to(receiver).emit('saveAnswer', {
             answer,
             sender: socket.id,
+            senderDetails
         });
     })
     socket.on('negoOffer', ({offer, to})=>{
@@ -82,10 +82,6 @@ io.on('connection', (socket) => {
     socket.on('streamStopped', (to, type)=>{
         console.log(`${type} stream stopped from ${socket.id} to ${to}`);
         socket.to(to).emit('clearTracks', socket.id, type);
-    })
-    socket.on('roomLeft', roomId=>{
-        socket.leave(roomId);
-        console.log('room left');
     })
     socket.on('chatSend', (to, message)=>{
         console.log(`Chat message from ${socket.id} to ${to}`,message);
