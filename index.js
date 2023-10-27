@@ -28,7 +28,7 @@ io.on('connection', (socket) => {
         try {
             if(!roomId) return;
             console.log("requesting",roomId,socket.id);
-            roomParts[roomId].forEach(({socketId})=>{
+            roomParts[roomId]?.forEach(({socketId})=>{
                 socket.to(socketId).emit('userRequestJoinRoom', {
                     user,
                     socketId: socket.id
