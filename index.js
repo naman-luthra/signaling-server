@@ -1,6 +1,9 @@
-import express from 'express';
+import express, { query } from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
+import { firestore } from './firebase';
+import { collection, getDocs, query as firebaseQuery, where } from 'firebase/firestore'
+import { randomUUID } from 'crypto'
 
 const app = express();
 const server = http.createServer(app);
@@ -14,28 +17,73 @@ const io = new Server(server, {
 app.get('/', (req, res) => {
     res.status(200);
 });
+
 const roomParts = {};
+const tempSecrets = new Map();
 
 io.on('connection', (socket) => {
     console.log('a user connected');
     console.log(socket.id);
-    socket.on('roomJoined', roomId=>{
-        console.log("joined",roomId,socket.id);
-        if(!roomId) return;
-        if(roomParts[roomId]?.find(({socketId})=>socketId==socket.id)) return;
-        roomParts[roomId] = roomParts[roomId] ? [...roomParts[roomId], {
-            socketId: socket.id
-        }] : [{
-            socketId: socket.id
-        }];
-        if(roomParts[roomId].length-1){
-            console.log(`Asking for ${roomParts[roomId].length-1} offers`);
-            socket.emit('createOffers', {
-                sockets: roomParts[roomId].filter(({socketId})=>socketId!=socket.id).map(({socketId})=>socketId),
-                roomId
+    socket.on('requestJoinRoom', (roomId, user)=>{
+        try {
+            if(!roomId) return;
+            console.log("requesting",roomId,socket.id);
+            roomParts[roomId].forEach(({socketId})=>{
+                socket.to(socketId).emit('userRequestJoinRoom', {
+                    user,
+                    socketId: socket.id
+                })
             });
+        } catch (error) {
+            console.log(error);
         }
-        console.log(roomParts);
+    });
+    socket.on('roomJoined', async (roomId, secret)=>{
+        try {
+            console.log("joined",roomId,socket.id);
+            if(!roomId) return;
+            const roomsRef = collection(firestore, 'rooms');
+            const roomQuery =  firebaseQuery(roomsRef, where('roomId', '==', roomId));
+            const result = await getDocs(roomQuery);
+            if(result.docs[0].data().secret!=secret){
+                if(!tempSecrets.get(roomId).find(({secret: tempSecret})=>tempSecret==secret))
+                    return;
+            }
+            if(roomParts[roomId]?.find(({socketId})=>socketId==socket.id)) return;
+            roomParts[roomId] = roomParts[roomId] ? [...roomParts[roomId], {
+                socketId: socket.id
+            }] : [{
+                socketId: socket.id
+            }];
+            if(roomParts[roomId].length-1){
+                console.log(`Asking for ${roomParts[roomId].length-1} offers`);
+                socket.emit('createOffers', {
+                    sockets: roomParts[roomId].filter(({socketId})=>socketId!=socket.id).map(({socketId})=>socketId),
+                    roomId
+                });
+            }
+            console.log(roomParts);
+        } catch (error) {
+            console.log(error);
+        }
+    });
+    socket.on('userAccepted', (roomId, socketId)=>{
+        console.log(`Accepted from ${socket.id} to ${socketId} on ${roomId}`);
+        if(!roomId) return;
+        const tempSecret = randomUUID();
+        tempSecrets.set(roomId, [
+            ...tempSecrets.get(roomId) || [],
+            {
+                secret: tempSecret,
+                socketId,
+                expiry : Date.now()+1000*60*5
+            }
+        ]
+        );
+        socket.to(socketId).emit('joinRequestAccepted',
+            roomId,
+            tempSecret
+        );
     });
     socket.on('offersCreated', (roomId, offers)=>{
         console.log(`Offers created for ${roomId}`,offers);
@@ -84,7 +132,7 @@ io.on('connection', (socket) => {
         socket.to(to).emit('clearTracks', socket.id, type);
     })
     socket.on('chatSend', (to, message)=>{
-        console.log(`Chat message from ${socket.id} to ${to}`,message);
+        console.log(`Chat message from ${socket.id} to ${to}`);
         socket.to(to).emit('receiveChat', {
             message,
             sender: socket.id,
