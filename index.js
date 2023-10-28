@@ -46,8 +46,13 @@ io.on('connection', (socket) => {
             const roomQuery =  firebaseQuery(roomsRef, where('roomId', '==', roomId));
             const result = await getDocs(roomQuery);
             if(result.docs[0].data().secret!=secret){
-                if(!tempSecrets.get(roomId).find(({secret: tempSecret})=>tempSecret==secret))
+                const tempSecret = tempSecrets.get(roomId).find(({secret: tempSecret})=>tempSecret==secret)
+                if(!tempSecret)
                     return;
+                else if(tempSecret.expiry<Date.now()){
+                    tempSecrets.set(roomId, tempSecrets.get(roomId).filter(({secret: tempSecret})=>tempSecret!=secret));
+                    return;
+                }
             }
             if(roomParts[roomId]?.find(({socketId})=>socketId==socket.id)) return;
             roomParts[roomId] = roomParts[roomId] ? [...roomParts[roomId], {
